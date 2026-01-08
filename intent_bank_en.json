@@ -1,0 +1,17 @@
+[
+  {"intent":"STOP", "text":"stop"},
+  {"intent":"STOP", "text":"please stop"},
+  {"intent":"STOP", "text":"pause"},
+  {"intent":"STOP", "text":"hold on"},
+  {"intent":"START", "text":"start"},
+  {"intent":"START", "text":"begin"},
+  {"intent":"START", "text":"continue"},
+  {"intent":"MOVE_SLOW", "text":"move slowly"},
+  {"intent":"MOVE_SLOW", "text":"please move slower"},
+  {"intent":"EXPLAIN", "text":"what are you doing"},
+  {"intent":"EXPLAIN", "text":"please explain"},
+  {"intent":"PAIN", "text":"it hurts"},
+  {"intent":"PAIN", "text":"I feel pain"},
+  {"intent":"OK", "text":"I am okay"},
+  {"intent":"OK", "text":"it is fine"}
+]
