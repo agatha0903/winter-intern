@@ -20,7 +20,7 @@ class VoiceEmergencySystem:
 
         print("[Voice] Loading Whisper Model (tiny)...")
         try:
-            self.model = whisper.load_model("base")
+            self.model = whisper.load_model("tiny")
             print("[Voice] Model Loaded.")
         except Exception as e:
             print(f"[Voice Error] 모델 로드 실패: {e}")
@@ -47,17 +47,23 @@ class VoiceEmergencySystem:
                     with open(temp_filename, "wb") as f:
                         f.write(audio.get_wav_data())
 
+                    start_time = time.time()
+
                     # Whisper로 텍스트 변환
                     result = self.model.transcribe(temp_filename, fp16=False)
+
+                    end_time = time.time()
+                    interference_time = end_time - start_time
                     text = result['text'].lower().strip()
 
                     if text:
+                        print(f"위스퍼 지연 시간: {interference_time}")
                         print(f"[Voice Heard] '{text}'")
 
                         # 키워드 매칭 확인
                         if any(k in text for k in STOP_KEYWORDS):
                             if self.log_callback:
-                                self.log_callback(f"로봇 비상 정지 동작 감지 및 실행")
+                                self.log_callback(f"로봇 비상 정지 동작 감지 및 실행. 위스퍼 지연 시간: {interference_time}")
                             self.rtde_c.stopL(2.0)
                             self.stop_flag = True
                             break
