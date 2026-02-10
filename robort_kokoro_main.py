@@ -4,9 +4,17 @@ import math
 import sys
 import os
 import datetime
+import torchaudio
+sys.modules['torchcodec'] = None
+torchaudio.utils._handle_backend = lambda *args, **kwargs: None
+# try:
+#     torchaudio.set_audio_backend("soundfile")
+# except:
+#     pass
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from src.briefing import BriefingSystem
 from src.voice_stop import VoiceEmergencySystem
+from src.voice_check import SpeakerAuth
 
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
@@ -16,12 +24,13 @@ ROBOT_SPEED = 0.025
 ROBOT_ACCEL = 0.1
 BRIEFING_INTERVAL = 5.0
 LOG_FILENAME = f"event_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+MASTER_VOICE_FILE = "master.wav"
 
 def get_distance(p1, p2):
     return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2 + (p1[2] - p2[2]) ** 2)
 
 def init_log_file():
-    with open('log.csv', 'w', newline='') as f:
+    with open(LOG_FILENAME, 'w', newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         writer.writerow(['timestamp', 'event tag'])
     print(f"log file {LOG_FILENAME}이 생성되었습니다.")
@@ -37,8 +46,11 @@ def main():
     init_log_file()
     briefing = BriefingSystem()
 
+    auth_system = SpeakerAuth(master_file=MASTER_VOICE_FILE)
+
     print(f"[ROBOT] Connecting to {ROBOT_IP}...")
     try:
+        log_time("시스템 시작")
         rtde_c = RTDEControlInterface(ROBOT_IP)
         rtde_r = RTDEReceiveInterface(ROBOT_IP)
         print("[ROBOT] Connection Successful!")
@@ -46,11 +58,27 @@ def main():
         print(f"[ROBOT ERROR] 연결 실패: {e}")
         sys.exit(1)
 
+    while True:
+        briefing.announce("Please say your name.")
+        briefing.wait_until_finished()
+
+        is_same_person, score = auth_system.verify()
+
+        print(f"유사도 점수: {score:.4f}")
+
+        if is_same_person:
+            briefing.announce("approved.")
+            briefing.wait_until_finished()
+            break
+        else:
+            briefing.announce("failed. Please try again.")
+            briefing.wait_until_finished()
+            time.sleep(1)
+
     voice_system = VoiceEmergencySystem(rtde_c, log_callback=log_time)
     voice_system.start()
 
     time.sleep(1.0)
-
     try:
         # HOME_POSE = [-0.14397, -0.43562, -0.19797, 0.001, -3.166, -0.040]
         # briefing.announce("Starting home pose.")
@@ -76,8 +104,7 @@ def main():
         # print(f"Starting loop with {len(waypoints)} waypoints.")
         log_time("시작 tts 생성")
         briefing.announce("Starting sequence.")
-        #time.sleep(2.0)
-        briefing.wait_until_finished() #tts 끝날 때 까지 기다렸다가 동작 시작.
+        briefing.wait_until_finished()
         total_moved_distance = 0.0
         last_pose = start_pose
 
@@ -117,12 +144,13 @@ def main():
             if voice_system.is_triggered():
                 print("비상 정지.")
                 break
-            target_pose[2] -= 0.005
 
+            target_pose[1] += 0.001
             rtde_c.moveL(target_pose, ROBOT_SPEED, ROBOT_ACCEL, True)
 
             while True:
                 if voice_system.is_triggered():
+                    rtde_c.stopL(1.0)
                     break
                 curr_pose = rtde_r.getActualTCPPose()
 
@@ -139,15 +167,13 @@ def main():
                     last_briefing_time = current_time
 
                 remaining_dist = get_distance(curr_pose, target_pose)
-                if remaining_dist < 0.001:
+                if remaining_dist < 0.005:
                     break
 
-                time.sleep(0.02)
+                time.sleep(0.01)
 
             if voice_system.is_triggered():
                 break
-
-        rtde_c.stopL() #확인사살용 한번 더 명령 내림
 
         if voice_system.is_triggered():
             briefing.wait_until_finished()
